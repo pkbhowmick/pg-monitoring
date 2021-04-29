@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"github.com/pkbhowmick/pg-monitoring/model"
 	"github.com/pkbhowmick/pg-monitoring/pkg/database"
 	"log"
 	"time"
+
+	"github.com/tidwall/pretty"
 )
 
 
@@ -58,7 +61,10 @@ func main()  {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	for _, item := range statements {
-		fmt.Println(item)
+	data, err := json.Marshal(statements)
+	if err != nil {
+		log.Fatalln(err)
 	}
+	jsonStr := string(pretty.Pretty(data))
+	fmt.Println(jsonStr)
 }

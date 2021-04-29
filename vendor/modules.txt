@@ -3,3 +3,6 @@
 github.com/lib/pq
 github.com/lib/pq/oid
 github.com/lib/pq/scram
+# github.com/tidwall/pretty v1.1.0
+## explicit
+github.com/tidwall/pretty
