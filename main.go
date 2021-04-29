@@ -5,20 +5,18 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/pkbhowmick/pg-monitoring/model"
-	"github.com/pkbhowmick/pg-monitoring/pkg/database"
 	"log"
 	"time"
+
+	"github.com/pkbhowmick/pg-monitoring/model"
+	"github.com/pkbhowmick/pg-monitoring/pkg/database"
 
 	"github.com/tidwall/pretty"
 )
 
-
 const (
-	DBConnectionConfig = "host=/var/run/postgresql port=5432 user=pulak sslmode=disable application_name=pgmetrics lock_timeout=50 statement_timeout=5000"
+	DBConnectionConfig = "host=/var/run/postgresql port=5432 user=pulak sslmode=disable lock_timeout=50 statement_timeout=5000"
 )
-
-
 
 func GetStatements(db *sql.DB) ([]model.Statement, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -30,7 +28,7 @@ func GetStatements(db *sql.DB) ([]model.Statement, error) {
           LIMIT 10`
 	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -48,20 +46,51 @@ func GetStatements(db *sql.DB) ([]model.Statement, error) {
 
 }
 
+func GetDatabases(db *sql.DB) ([]model.Database, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-func main()  {
+	q := `SELECT D.oid, D.datname, D.datdba, D.dattablespace, s.numbackends
+			FROM pg_database AS D JOIN pg_stat_database AS S ON D.oid = S.datid
+			WHERE (NOT D.datistemplate)
+			ORDER BY D.oid ASC`
+	rows, err := db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	var databases []model.Database
+	for rows.Next() {
+		var d model.Database
+		err := rows.Scan(&d.OID, &d.Name, &d.DatDBA, &d.DatTableSpace, &d.NumBackends)
+		if err != nil {
+			return nil, err
+		}
+		databases = append(databases, d)
+	}
+	return databases, nil
+}
+
+func main() {
 	connConfig := database.GetDefaultCollectConfig()
-	db, err := database.GetDBConnection(DBConnectionConfig,connConfig)
+	db, err := database.GetDBConnection(DBConnectionConfig, connConfig)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	defer db.Close()
 
-	statements, err := GetStatements(db)
+	var model model.Model
+
+	model.Statements, err = GetStatements(db)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	data, err := json.Marshal(statements)
+
+	model.Databases, err = GetDatabases(db)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	data, err := json.Marshal(model)
 	if err != nil {
 		log.Fatalln(err)
 	}
