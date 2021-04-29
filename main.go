@@ -70,6 +70,34 @@ func GetDatabases(db *sql.DB) ([]model.Database, error) {
 	return databases, nil
 }
 
+func GetTablesInfo(db *sql.DB) ([]model.Table, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	q := `SELECT relid, schemaname, relname, current_database(), n_tup_ins, n_live_tup
+			FROM pg_stat_user_tables
+			ORDER BY relid ASC`
+
+	rows, err := db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+
+	var tables []model.Table
+
+	for rows.Next() {
+		var t model.Table
+
+		err := rows.Scan(&t.OID, &t.SchemaName, &t.Name, &t.DBName, &t.RowsInserted, &t.RowsLive)
+		if err != nil {
+			return nil, err
+		}
+
+		tables = append(tables, t)
+	}
+	return tables, nil
+}
+
 func main() {
 	connConfig := database.GetDefaultCollectConfig()
 	db, err := database.GetDBConnection(DBConnectionConfig, connConfig)
@@ -86,6 +114,11 @@ func main() {
 	}
 
 	model.Databases, err = GetDatabases(db)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	model.Tables, err = GetTablesInfo(db)
 	if err != nil {
 		log.Fatalln(err)
 	}

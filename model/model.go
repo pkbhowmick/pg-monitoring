@@ -3,6 +3,7 @@ package model
 type Model struct {
 	Statements []Statement `json:"statements"`
 	Databases  []Database  `json:"databases"`
+	Tables     []Table     `json:"tables"`
 }
 
 type Statement struct {
@@ -22,4 +23,13 @@ type Database struct {
 	DatDBA        int    `json:"dat_dba"`
 	DatTableSpace int    `json:"dat_table_space"`
 	NumBackends   int    `json:"num_backends"`
+}
+
+type Table struct {
+	OID          int    `json:"oid"`
+	DBName       string `json:"db_name"`
+	SchemaName   string `json:"schema_name"`
+	Name         string `json:"name"`
+	RowsInserted int    `json:"rows_inserted"`
+	RowsLive     int    `json:"rows_live"`
 }
