@@ -4,18 +4,19 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
+	"net/http"
 	"time"
 
-	"github.com/pkbhowmick/pg-monitoring/model"
 	"github.com/pkbhowmick/pg-monitoring/pkg/database"
-
 	"github.com/tidwall/pretty"
+
+	"github.com/gorilla/mux"
+	"github.com/pkbhowmick/pg-monitoring/model"
 )
 
 const (
-	DBConnectionConfig = "host=/var/run/postgresql port=5432 user=pulak sslmode=disable lock_timeout=50 statement_timeout=5000"
+	DBConnectionConfig = "provide db config here"
 )
 
 func GetStatements(db *sql.DB) ([]model.Statement, error) {
@@ -98,13 +99,15 @@ func GetTablesInfo(db *sql.DB) ([]model.Table, error) {
 	return tables, nil
 }
 
-func main() {
+func GetJsonMetrics(res http.ResponseWriter, req *http.Request) {
 	connConfig := database.GetDefaultCollectConfig()
 	db, err := database.GetDBConnection(DBConnectionConfig, connConfig)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	defer db.Close()
+
+	log.Println("Successfully connected to databases")
 
 	var model model.Model
 
@@ -127,6 +130,26 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	jsonStr := string(pretty.Pretty(data))
-	fmt.Println(jsonStr)
+	jsonStr := pretty.Pretty(data)
+	res.Write(jsonStr)
+}
+
+func GetPromMetrics(res http.ResponseWriter, req *http.Request) {
+	res.Write([]byte(`Prometheus metrics will come here`))
+}
+
+func main() {
+
+	router := mux.NewRouter()
+
+	router.HandleFunc("/json", GetJsonMetrics).Methods(http.MethodGet)
+
+	router.HandleFunc("/metrics", GetPromMetrics).Methods(http.MethodGet)
+
+	server := &http.Server{
+		Addr:    ":8099",
+		Handler: router,
+	}
+	log.Println("Server is listening on port 8099")
+	log.Fatal(server.ListenAndServe())
 }

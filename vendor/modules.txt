@@ -1,3 +1,6 @@
+# github.com/gorilla/mux v1.8.0
+## explicit
+github.com/gorilla/mux
 # github.com/lib/pq v1.10.1
 ## explicit
 github.com/lib/pq
