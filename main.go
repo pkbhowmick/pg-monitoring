@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -157,6 +158,32 @@ func NewConnection() (nc *nats.Conn, err error) {
 	}
 }
 
+func PublishEvent(nc *nats.Conn, subject string, data []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	for {
+		_, err := nc.Request(subject, data, 5*time.Second)
+		if err == nil {
+			cancel()
+		} else {
+			log.Printf("could not publish database metrics: %s\n", err)
+		}
+
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				return errors.New("timeout")
+			} else if ctx.Err() == context.Canceled {
+				log.Println("Published event and acknowledged")
+				return nil
+			}
+		default:
+			time.Sleep(time.Second)
+		}
+	}
+}
+
 func main() {
 	nc, err := NewConnection()
 	if err != nil {
@@ -167,9 +194,10 @@ func main() {
 		if err != nil {
 			log.Printf("could not get database metrics: %s\n", err)
 		}
-		err = nc.Publish("metrics.postgres", jsonObj)
+
+		err = PublishEvent(nc, "metrics.postgres", jsonObj)
 		if err != nil {
-			log.Printf("could not publish database metrics: %s\n", err)
+			log.Println(err)
 		}
 		time.Sleep(5 * time.Second)
 	}
