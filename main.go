@@ -163,7 +163,8 @@ func PublishEvent(nc *nats.Conn, subject string, data []byte) error {
 	defer cancel()
 
 	for {
-		_, err := nc.Request(subject, data, 5*time.Second)
+		err := nc.Publish(subject, data)
+		// _, err := nc.Request(subject, data, 5*time.Second)
 		if err == nil {
 			cancel()
 		} else {
@@ -175,7 +176,7 @@ func PublishEvent(nc *nats.Conn, subject string, data []byte) error {
 			if ctx.Err() == context.DeadlineExceeded {
 				return errors.New("timeout")
 			} else if ctx.Err() == context.Canceled {
-				log.Println("Published event and acknowledged")
+				log.Println("successfully published event")
 				return nil
 			}
 		default:
