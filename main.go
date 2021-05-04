@@ -4,19 +4,20 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
+	"github.com/nats-io/nats.go"
+	"github.com/pkbhowmick/pg-monitoring/model"
 	"github.com/pkbhowmick/pg-monitoring/pkg/database"
 	"github.com/tidwall/pretty"
-
-	"github.com/gorilla/mux"
-	"github.com/pkbhowmick/pg-monitoring/model"
 )
 
-const (
-	DBConnectionConfig = "provide db config here"
+var (
+	DBConnectionConfig = os.Getenv("DB_URL")
 )
 
 func GetStatements(db *sql.DB) ([]model.Statement, error) {
@@ -99,7 +100,7 @@ func GetTablesInfo(db *sql.DB) ([]model.Table, error) {
 	return tables, nil
 }
 
-func GetJsonMetrics(res http.ResponseWriter, req *http.Request) {
+func GetJsonMetrics() ([]byte, error) {
 	connConfig := database.GetDefaultCollectConfig()
 	db, err := database.GetDBConnection(DBConnectionConfig, connConfig)
 	if err != nil {
@@ -113,43 +114,63 @@ func GetJsonMetrics(res http.ResponseWriter, req *http.Request) {
 
 	model.Statements, err = GetStatements(db)
 	if err != nil {
-		log.Fatalln(err)
+		return nil, err
 	}
 
 	model.Databases, err = GetDatabases(db)
 	if err != nil {
-		log.Fatalln(err)
+		return nil, err
 	}
 
 	model.Tables, err = GetTablesInfo(db)
 	if err != nil {
-		log.Fatalln(err)
+		return nil, err
 	}
 
 	data, err := json.Marshal(model)
 	if err != nil {
-		log.Fatalln(err)
+		return nil, err
 	}
 	jsonStr := pretty.Pretty(data)
-	res.Write(jsonStr)
+	return jsonStr, nil
 }
 
 func GetPromMetrics(res http.ResponseWriter, req *http.Request) {
 	res.Write([]byte(`Prometheus metrics will come here`))
 }
 
-func main() {
+func NewConnection() (nc *nats.Conn, err error) {
+	servers := os.Getenv("NATS_URL")
 
-	router := mux.NewRouter()
-
-	router.HandleFunc("/json", GetJsonMetrics).Methods(http.MethodGet)
-
-	router.HandleFunc("/metrics", GetPromMetrics).Methods(http.MethodGet)
-
-	server := &http.Server{
-		Addr:    ":8099",
-		Handler: router,
+	if servers == "" {
+		return nil, fmt.Errorf("no server is specified. Specify a server to connect to using NATS_URL")
 	}
-	log.Println("Server is listening on port 8099")
-	log.Fatal(server.ListenAndServe())
+
+	for {
+		nc, err := nats.Connect(servers)
+		if err == nil {
+			return nc, nil
+		}
+
+		log.Printf("could not connect to NATS: %s\n", err)
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+func main() {
+	nc, err := NewConnection()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	for {
+		jsonObj, err := GetJsonMetrics()
+		if err != nil {
+			log.Printf("could not get database metrics: %s\n", err)
+		}
+		err = nc.Publish("metrics.postgres", jsonObj)
+		if err != nil {
+			log.Printf("could not publish database metrics: %s\n", err)
+		}
+		time.Sleep(5 * time.Second)
+	}
 }
