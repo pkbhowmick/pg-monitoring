@@ -1,9 +1,12 @@
 package model
 
+import "time"
+
 type Model struct {
 	Statements []Statement `json:"statements"`
 	Databases  []Database  `json:"databases"`
 	Tables     []Table     `json:"tables"`
+	UpdatedAt  time.Time   `json:"updated_at"`
 }
 
 type Statement struct {
