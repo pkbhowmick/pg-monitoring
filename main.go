@@ -8,17 +8,18 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/pkbhowmick/pg-monitoring/model"
 	"github.com/pkbhowmick/pg-monitoring/pkg/database"
 	"github.com/tidwall/pretty"
+	"gopkg.in/ini.v1"
 )
 
 var (
-	DBConnectionConfig = os.Getenv("DB_URL")
+	cfg                *ini.File
+	DBConnectionConfig string
 )
 
 func GetStatements(db *sql.DB) ([]model.Statement, error) {
@@ -105,6 +106,7 @@ func GetJsonMetrics() ([]byte, error) {
 	connConfig := database.GetDefaultCollectConfig()
 	db, err := database.GetDBConnection(DBConnectionConfig, connConfig)
 	if err != nil {
+		fmt.Println("Error in db collection creation")
 		log.Fatalln(err)
 	}
 	defer db.Close()
@@ -141,7 +143,7 @@ func GetPromMetrics(res http.ResponseWriter, req *http.Request) {
 }
 
 func NewConnection() (nc *nats.Conn, err error) {
-	servers := os.Getenv("NATS_URL")
+	servers := cfg.Section("NATS").Key("NATS_URL").String()
 
 	if servers == "" {
 		return nil, fmt.Errorf("no server is specified. Specify a server to connect to using NATS_URL")
@@ -186,10 +188,19 @@ func PublishEvent(nc *nats.Conn, subject string, data []byte) error {
 }
 
 func main() {
+	var err error
+	cfg, err = ini.Load("./app.ini")
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	DBConnectionConfig = cfg.Section("DATABASE").Key("DB_URL").String()
+
 	nc, err := NewConnection()
 	if err != nil {
 		log.Fatalln(err)
 	}
+
 	for {
 		jsonObj, err := GetJsonMetrics()
 		if err != nil {

@@ -1,0 +1,5 @@
+[DATABASE]
+DB_URL = "database_connection_string_here"
+
+[NATS]
+NATS_URL = "nats_url_here"
